@@ -25,7 +25,7 @@ class DataHelper:
 
     def fetch_stock_history(
         tickers: List[TickerSymbol],
-        start_date: dt.date = dt.date(2010, 1, 1),
+        start_date: dt.date = dt.date(1950, 1, 1),
         end_date=dt.date(2025, 1, 1),
     ) -> pd.DataFrame:
         tickers = [ticker.name for ticker in tickers]

@@ -12,14 +12,9 @@ import sklearn.metrics as metrics
 import statsmodels.api as sm
 import tensorflow as tf
 import yfinance as yf
-from keras.api.callbacks import EarlyStopping
-from keras.api.layers import LSTM, Dense, Dropout, Input
-from sklearn.preprocessing import MinMaxScaler
-from statsmodels.tsa.arima.model import ARIMA, ARIMAResults
-from statsmodels.tsa.stattools import adfuller, kpss
 
 from investment_and_trading.data_helper import DataHelper
-from investment_and_trading.lstm_model import LSTMModel, Sequential
+from investment_and_trading.lstm_model import LSTMModel
 from investment_and_trading.types import TickerSymbol
 
 
@@ -38,22 +33,22 @@ class StockModel:
         )
 
     def generate_lstm_model(
-        self, features: Optional[List[str]], target_feature: Optional[str]
+        self, features: Optional[List[str]] = None, target_feature: Optional[str] = None
     ) -> None:
         if features is None:
-            features = self.data.columns
+            features = list(self.data.columns)
         if target_feature is None:
             target_feature = "Adj Close"
-        self.lstm_model = LSTMModel(features=features, target_feature=target_feature)
+        self.lstm_model = LSTMModel(data=self.data, features=features, target_feature=target_feature)
 
-    def __save_trained_lstm_model(self) -> None:
-        self.lstm_model.save_trained_lstm_model(ticker_name=self.ticker.name)
+    def save_lstm_model(self) -> None:
+        self.lstm_model._save_trained_lstm_model(ticker_name=self.ticker.name)
 
     def load_lstm_model(self) -> None:
-        self.lstm_model = LSTMModel.load_trained_model()
+        self.lstm_model = LSTMModel._load_trained_model(data=self.data, ticker_name=self.ticker.name)
 
     def generate_lstm_prediction_plot(
-        self, data: pd.DataFrame, prediction_days_ahead: int = 7
+        self, prediction_days_ahead: int = 7
     ) -> go.Figure:
 
         predictions = self.lstm_model.make_predictions(days_ahead=prediction_days_ahead)
@@ -61,27 +56,27 @@ class StockModel:
         fig = go.Figure()
         fig.add_trace(
             go.Scatter(
-                x=data.index,
-                y=data["Adj Close"],
+                x=self.data.index,
+                y=self.data["Adj Close"],
                 mode="lines",
                 name="Adj Close History",
             )
         )
-        for days, preds in predictions.items():
-            future_dates = pd.date_range(
-                start=data.index[-1], periods=days + 1, freq="B"
+
+        future_dates = pd.date_range(
+            start=self.data.index[-1], periods=prediction_days_ahead + 1, freq="B"
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=future_dates,
+                y=np.insert(predictions, 0, self.data["Adj Close"].iloc[-1]),
+                mode="lines",
+                name=f"Predict {prediction_days_ahead}d",
             )
-            fig.add_trace(
-                go.Scatter(
-                    x=future_dates,
-                    y=np.insert(preds, 0, data["Adj Close"].iloc[-1]),
-                    mode="lines",
-                    name=f"Forecast {days}d",
-                )
-            )
+        )
 
         fig.update_layout(
-            title=f"{self.ticker.name} price prediction",
+            title=f"{self.ticker.name} Adjusted Close Price Prediction",
             xaxis_title="Date",
             yaxis_title="Adj Close Price",
             template="plotly_dark",
