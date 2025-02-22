@@ -16,23 +16,16 @@ from stock_price_prediction.types import TickerSymbol
 
 class LSTMModel:
 
-    def __init__(self, data: pd.DataFrame, features: List[str], target_feature: str) -> None:
+    def __init__(self, data: pd.DataFrame, features: List[str], target_feature: str, seq_length: int = 30) -> None:
         self.data = data
         self.features = features
         self.target_feature = target_feature
         self.feature_index_map = {feat: idx for idx, feat in enumerate(features)}
-        self.seq_length = 30
+        self.seq_length = seq_length
         self.trained = False
 
     def train_model(self, ) -> None:
-        self.split_and_scale()
-
-        X_train, y_train = self.create_sequences(
-            data=self.train_data_scaled,
-        )
-        self.X_test, self.y_test = self.create_sequences(
-            data=self.test_data_scaled,
-        )
+        self.split_scale_sequence()
 
         self.model = self.create_model()
         self.model.compile(optimizer="adam", loss="mse")
@@ -40,34 +33,42 @@ class LSTMModel:
             monitor="val_loss", patience=5, restore_best_weights=True
         )
         self.history = self.model.fit(
-            X_train,
-            y_train,
+            self.X_train,
+            self.y_train,
             epochs=20,
             batch_size=32,
             validation_data=(self.X_test, self.y_test),
             callbacks=[early_stopping],
+            verbose=1,
+            sample_weight=np.linspace(0.5, 2, self.X_train.shape[0])
         )
 
         self.trained = True
 
-    def split_and_scale(self) -> None:
+    def split_scale_sequence(self) -> None:
         train_size = int(len(self.data) * 0.8)
         train_data = self.data.iloc[:train_size]
         test_data = self.data.iloc[train_size:]
 
-        # Initialize scaler and fit only on training data
+        # Initialize scaler and fit it on training data
         self.scaler = MinMaxScaler()
-        self.train_data_scaled = pd.DataFrame(
+        train_data_scaled = pd.DataFrame(
             self.scaler.fit_transform(train_data[self.features]),
             columns=self.features,
             index=train_data.index,
         )
+        self.X_train, self.y_train = self.create_sequences(
+            data=train_data_scaled,
+        )
 
-        # Transform test data using the same scaler (without fitting)
+        # Transform test data using fitted scaler
         self.test_data_scaled = pd.DataFrame(
             self.scaler.transform(test_data[self.features]),
             columns=self.features,
             index=test_data.index,
+        )        
+        self.X_test, self.y_test = self.create_sequences(
+            data=self.test_data_scaled,
         )
 
     def create_sequences(self, data: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
@@ -128,25 +129,34 @@ class LSTMModel:
             :, self.feature_index_map[self.target_feature]
         ]
 
-        return predictions_descaled
+        predictions_with_last_day = np.insert(predictions_descaled, 0, self.data[self.target_feature].iloc[-1])
+
+        smoothing_factor = 0.1
+        predictions_smoothed = [predictions_with_last_day[0]]
+        for p in predictions_with_last_day[1:]:
+            predictions_smoothed.append(smoothing_factor * p + (1 - smoothing_factor) * predictions_smoothed[-1])
+
+        return predictions_smoothed
+    
+    def get_model_statistics(self) -> dict:
+        y_pred = self.model.predict(self.X_test, verbose=0)
+        return {
+            "Features": self.features,
+            "Target feature": self.target_feature,
+            "MSE": metrics.mean_squared_error(y_true=self.y_test, y_pred=y_pred),
+            "MAE": metrics.mean_absolute_error(y_true=self.y_test, y_pred=y_pred),
+            "5% of mean Adj Close": self.data["Adj Close"].mean() * 0.05,
+            "5% of mean Adj Close last 10 years": self.data["Adj Close"][
+                self.data.index.date >= dt.date(self.data.index[-1].year - 10, 1, 1)
+            ].mean()
+            * 0.05,
+        }
 
     def _save_trained_lstm_model(self, ticker_name: str) -> None:
         if self.trained:
             self.model.save(Path(__file__).parent.parent / "data" / "models" / f"lstm_{ticker_name}.keras")
             
-            y_pred = self.model.predict(self.X_test)
-            log = {
-                "ticker": ticker_name,
-                "Features": self.features,
-                "Target feature": self.target_feature,
-                "MSE": metrics.mean_squared_error(y_true=self.y_test, y_pred=y_pred),
-                "MAE": metrics.mean_absolute_error(y_true=self.y_test, y_pred=y_pred),
-                "5% of mean Adj Close": self.data["Adj Close"].mean() * 0.05,
-                "5% of mean Adj Close last 10 years": self.data["Adj Close"][
-                    self.data.index.date >= dt.date(self.data.index[-1].year - 10, 1, 1)
-                ].mean()
-                * 0.05,
-            }
+            log = self.get_model_statistics()
             with open(Path(__file__).parent.parent / "data" / "logs" / f"log_{ticker_name}.json", "w") as file:
                 json.dump(log, file)
                 file.write("\n")
@@ -170,6 +180,6 @@ class LSTMModel:
         )
         lstm_model.model = loaded_model
         lstm_model.trained = True
-        lstm_model.split_and_scale()
+        lstm_model.split_scale_sequence()
 
         return lstm_model

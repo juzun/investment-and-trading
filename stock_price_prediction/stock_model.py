@@ -33,13 +33,13 @@ class StockModel:
         )
 
     def generate_lstm_model(
-        self, features: Optional[List[str]] = None, target_feature: Optional[str] = None
+        self, features: Optional[List[str]] = None, target_feature: Optional[str] = None, seq_length: int = 30
     ) -> None:
         if features is None:
             features = list(self.data.columns)
         if target_feature is None:
             target_feature = "Adj Close"
-        self.lstm_model = LSTMModel(data=self.data, features=features, target_feature=target_feature)
+        self.lstm_model = LSTMModel(data=self.data, features=features, target_feature=target_feature, seq_length=seq_length)
 
     def save_lstm_model(self) -> None:
         self.lstm_model._save_trained_lstm_model(ticker_name=self.ticker.name)
@@ -69,7 +69,7 @@ class StockModel:
         fig.add_trace(
             go.Scatter(
                 x=future_dates,
-                y=np.insert(predictions, 0, self.data["Adj Close"].iloc[-1]),
+                y=predictions,
                 mode="lines",
                 name=f"Predict {prediction_days_ahead}d",
             )

@@ -17,6 +17,7 @@ from keras.api.models import Model, Sequential, load_model
 from sklearn.preprocessing import MinMaxScaler
 from statsmodels.tsa.arima.model import ARIMA, ARIMAResults
 from statsmodels.tsa.stattools import adfuller, kpss
+import warnings
 
 from stock_price_prediction.types import TickerSymbol
 
@@ -36,7 +37,10 @@ class DataHelper:
             auto_adjust=False,
             actions=True,
             multi_level_index=False,
+            progress=False,
         )
+        if stock_history.empty:
+            warnings.warn("Stock history returned from Yahoo Finance is empty.")
         return stock_history
 
     def preprocess_stock_history(stock_history: pd.DataFrame) -> pd.DataFrame:
