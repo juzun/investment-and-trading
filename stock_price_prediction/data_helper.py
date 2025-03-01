@@ -1,37 +1,25 @@
 import datetime as dt
-import json
-from typing import Dict, List, Tuple, Union
+import warnings
+from typing import List
 
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import plotly.graph_objects as go
-import seaborn as sns
-import sklearn.metrics as metrics
-import statsmodels.api as sm
-import tensorflow as tf
 import yfinance as yf
-from keras.api.callbacks import EarlyStopping
-from keras.api.layers import LSTM, Dense, Dropout, Input
-from keras.api.models import Model, Sequential, load_model
-from sklearn.preprocessing import MinMaxScaler
-from statsmodels.tsa.arima.model import ARIMA, ARIMAResults
-from statsmodels.tsa.stattools import adfuller, kpss
-import warnings
+from ruptures import Binseg
 
 from stock_price_prediction.types import TickerSymbol
 
 
 class DataHelper:
 
+    @staticmethod
     def fetch_stock_history(
         tickers: List[TickerSymbol],
         start_date: dt.date = dt.date(1950, 1, 1),
         end_date: dt.date = dt.date(2025, 1, 1),
     ) -> pd.DataFrame:
-        tickers = [ticker.name for ticker in tickers]
         stock_history = yf.download(
-            tickers=tickers,
+            tickers=[ticker.name for ticker in tickers],
             start=start_date,
             end=end_date,
             auto_adjust=False,
@@ -43,6 +31,7 @@ class DataHelper:
             warnings.warn("Stock history returned from Yahoo Finance is empty.")
         return stock_history
 
+    @staticmethod
     def preprocess_stock_history(stock_history: pd.DataFrame) -> pd.DataFrame:
         stock_history = stock_history[
             [
@@ -94,4 +83,17 @@ class DataHelper:
             stock_history, columns=["DayOfWeek"], drop_first=True
         )
 
-        return stock_history
+        new_start_date = DataHelper.detect_breakout_point(
+            prices=stock_history["Adj Close"]
+        ).replace(month=1, day=1)
+        stock_history_cut = stock_history[stock_history.index >= new_start_date]
+
+        return stock_history_cut
+
+    @staticmethod
+    def detect_breakout_point(prices: pd.Series) -> pd.Timestamp:
+        data_reshaped = np.array(prices).reshape(-1, 1)
+        binseg_model = Binseg(model="l2").fit(data_reshaped)
+        change_points = binseg_model.predict(n_bkps=1)
+
+        return prices.index[min(change_points)]

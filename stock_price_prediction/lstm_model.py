@@ -5,18 +5,22 @@ from typing import List, Tuple
 
 import numpy as np
 import pandas as pd
+import sklearn.metrics as metrics
 from keras.api.callbacks import EarlyStopping
 from keras.api.layers import LSTM, Dense, Dropout, Input
 from keras.api.models import Sequential, load_model
 from sklearn.preprocessing import MinMaxScaler
-import sklearn.metrics as metrics
-
-from stock_price_prediction.types import TickerSymbol
 
 
 class LSTMModel:
 
-    def __init__(self, data: pd.DataFrame, features: List[str], target_feature: str, seq_length: int = 30) -> None:
+    def __init__(
+        self,
+        data: pd.DataFrame,
+        features: List[str],
+        target_feature: str,
+        seq_length: int = 30,
+    ) -> None:
         self.data = data
         self.features = features
         self.target_feature = target_feature
@@ -24,7 +28,7 @@ class LSTMModel:
         self.seq_length = seq_length
         self.trained = False
 
-    def train_model(self, ) -> None:
+    def train_model(self) -> None:
         self.split_scale_sequence()
 
         self.model = self.create_model()
@@ -40,7 +44,7 @@ class LSTMModel:
             validation_data=(self.X_test, self.y_test),
             callbacks=[early_stopping],
             verbose=1,
-            sample_weight=np.linspace(0.5, 2, self.X_train.shape[0])
+            sample_weight=np.linspace(0.5, 2, self.X_train.shape[0]),
         )
 
         self.trained = True
@@ -66,7 +70,7 @@ class LSTMModel:
             self.scaler.transform(test_data[self.features]),
             columns=self.features,
             index=test_data.index,
-        )        
+        )
         self.X_test, self.y_test = self.create_sequences(
             data=self.test_data_scaled,
         )
@@ -104,8 +108,8 @@ class LSTMModel:
             input_seq = self.test_data_scaled.to_numpy()[-self.seq_length :].copy()
         else:
             input_seq = self.test_data_scaled[-self.seq_length :].copy()
-        
-        predictions = []        
+
+        predictions = []
 
         for _ in range(days_ahead):
             predicted_value = self.model.predict(
@@ -129,15 +133,24 @@ class LSTMModel:
             :, self.feature_index_map[self.target_feature]
         ]
 
-        predictions_with_last_day = np.insert(predictions_descaled, 0, self.data[self.target_feature].iloc[-1])
+        predictions_with_last_day = np.insert(
+            predictions_descaled, 0, self.data[self.target_feature].iloc[-1]
+        )
 
+        # Prediction smoothing
         smoothing_factor = 0.1
-        predictions_smoothed = [predictions_with_last_day[0]]
+        predictions_smoothed = np.array([predictions_with_last_day[0]])
         for p in predictions_with_last_day[1:]:
-            predictions_smoothed.append(smoothing_factor * p + (1 - smoothing_factor) * predictions_smoothed[-1])
+            predictions_smoothed = np.append(
+                predictions_smoothed,
+                (
+                    smoothing_factor * p
+                    + (1 - smoothing_factor) * predictions_smoothed[-1]
+                ),
+            )
 
         return predictions_smoothed
-    
+
     def get_model_statistics(self) -> dict:
         y_pred = self.model.predict(self.X_test, verbose=0)
         return {
@@ -154,10 +167,21 @@ class LSTMModel:
 
     def _save_trained_lstm_model(self, ticker_name: str) -> None:
         if self.trained:
-            self.model.save(Path(__file__).parent.parent / "data" / "models" / f"lstm_{ticker_name}.keras")
-            
+            self.model.save(
+                Path(__file__).parent.parent
+                / "data"
+                / "models"
+                / f"lstm_{ticker_name}.keras"
+            )
+
             log = self.get_model_statistics()
-            with open(Path(__file__).parent.parent / "data" / "logs" / f"log_{ticker_name}.json", "w") as file:
+            with open(
+                Path(__file__).parent.parent
+                / "data"
+                / "logs"
+                / f"log_{ticker_name}.json",
+                "w",
+            ) as file:
                 json.dump(log, file)
                 file.write("\n")
 

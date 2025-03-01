@@ -1,131 +1,86 @@
-import datetime as dt
-import json
-from typing import Dict, List, Tuple, Union
+from typing import Tuple
 
-import matplotlib.pyplot as plt
-import numpy as np
 import pandas as pd
-import plotly.graph_objects as go
-import seaborn as sns
-import sklearn.metrics as metrics
 import statsmodels.api as sm
-import tensorflow as tf
-import yfinance as yf
-from keras.api.callbacks import EarlyStopping
-from keras.api.layers import LSTM, Dense, Dropout, Input
-from keras.api.models import Model, Sequential, load_model
-from sklearn.preprocessing import MinMaxScaler
+import statsmodels.tsa.stattools as stattools
 from statsmodels.tsa.arima.model import ARIMA, ARIMAResults
-from statsmodels.tsa.stattools import adfuller, kpss
-
-from stock_price_prediction.types import TickerSymbol
 
 
-def get_arima_coefficients(series: pd.Series) -> Tuple[int, int, int]:
-    p, d, q = 0, 0, 0
+class ARIMAModel:
 
-    # Perform differencing testing and adjust d-parameter
-    while not adf_test(series):
-        series = series.pct_change()
-        series = series.dropna()
-        d += 1
+    def __init__(self, data: pd.DataFrame, target_feature: str) -> None:
+        self.data = data
+        self.target_feature = target_feature
 
-    if not kpss_test(series):
-        d += 1
+    def fit_arima_model(self) -> None:
+        arima_coefs = self.get_arima_coefficients(series=self.data[self.target_feature])
+        arima_model = ARIMA(self.data[self.target_feature], order=arima_coefs)
+        self.arima_result: ARIMAResults = arima_model.fit()
 
-    # Get parameters p and q from Autocorrelation and Partial Autocorrelation functions
-    p = int(sm.tsa.pacf(series).round(0).sum())
-    q = int(sm.tsa.acf(series).round(0).sum())
-    return p, d, q
+    def get_arima_coefficients(self, series: pd.Series) -> Tuple[int, int, int]:
+        p, d, q = 0, 0, 0
 
+        # Perform differencing testing and adjust d-parameter
+        while not self.adf_test(series):
+            series = series.pct_change()
+            series = series.dropna()
+            d += 1
 
-def adf_test(series: pd.Series) -> bool:
-    """
-    Check for stationarity using Augmented Dickey-Fuller test.
+        if not self.kpss_test(series):
+            d += 1
 
-    Attributes:
-        series: input data to be tested on stationarity.
+        # Get parameters p and q from Autocorrelation and Partial Autocorrelation functions
+        p = int(sm.tsa.pacf(series).round(0).sum())
+        q = int(sm.tsa.acf(series).round(0).sum())
+        return p, d, q
 
-    Returns:
-        bool: True if data are stationary, False if not.
-    """
-    result = adfuller(series)
-    # ADF Statistic: result[0], p-value: result[1]
-    if result[1] <= 0.05:
-        return True
-    else:
-        return False
+    def adf_test(self, series: pd.Series) -> bool:
+        """
+        Check for stationarity using Augmented Dickey-Fuller test.
 
+        Attributes:
+            series: input data to be tested on stationarity.
 
-def kpss_test(series: pd.Series) -> bool:
-    result = kpss(series)
-    if result[1] >= 0.05:
-        return True
-    else:
-        return False
+        Returns:
+            bool: True if data are stationary, False if not.
+        """
+        result = stattools.adfuller(series)
+        # ADF Statistic: result[0], p-value: result[1]
+        if result[1] <= 0.05:
+            return True
+        else:
+            return False
 
+    def kpss_test(self, series: pd.Series) -> bool:
+        result = stattools.kpss(series)
+        if result[1] >= 0.05:
+            return True
+        else:
+            return False
 
-ticker = TickerSymbol.UPS
-raw_data = fetch_stock_history(
-    tickers=[ticker], start=dt.date(1950, 1, 1), end=dt.date.today()
-)
-data = preprocess_stock_history(stock_history=raw_data)
-if data.index.year.nunique() < 20:
-    raise Warning("Data length is less than 20 years. Predictions might be inaccurate.")
-
-
-arima_coefs = get_arima_coefficients(series=data["Adj Close"])
-arima_model = ARIMA(data["Adj Close"], order=arima_coefs)
-arima_result: ARIMAResults = arima_model.fit()
-
-
-n_steps = 30
-
-forecast = arima_result.forecast(steps=n_steps)
-forecast_dates = pd.date_range(start=data.index[-1], periods=n_steps, freq="B")
-forecast_series = pd.Series(forecast, index=forecast_dates)
-forecast_series.iloc[0] = data["Adj Close"].iloc[-1]
-
-
-n_repetitions = 20
-simulations = arima_result.simulate(
-    nsimulations=n_steps,
-    anchor=data["Adj Close"].index[-1],
-    repetitions=n_repetitions,
-)
-simulations.iloc[0] = data["Adj Close"].iloc[-1]
-
-
-fig = go.Figure()
-
-fig.add_trace(
-    go.Scatter(
-        x=data.index, y=data["Adj Close"], mode="lines", name="Adj Close History"
-    )
-)
-fig.add_trace(
-    go.Scatter(
-        x=data.index, y=arima_result.fittedvalues, mode="lines", name="Fitted Values"
-    )
-)
-fig.add_trace(
-    go.Scatter(
-        x=forecast_series.index, y=forecast_series, mode="lines", name="Prediction"
-    )
-)
-for i, sim in enumerate(simulations):
-    fig.add_trace(
-        go.Scatter(
-            x=forecast_series.index,
-            y=simulations[sim],
-            mode="lines",
-            name=f"Simulation {i+1}",
+    def make_simulations(
+        self,
+        days_ahead: int,
+        n_simulations: int = 10,
+    ) -> pd.DataFrame:
+        simulations: pd.DataFrame = self.arima_result.simulate(
+            nsimulations=days_ahead,
+            anchor=self.data[self.target_feature].index[-1],
+            repetitions=n_simulations,
         )
-    )
-fig.update_layout(
-    title=f"ARIMA{arima_coefs} model",
-    xaxis_title="Date",
-    yaxis_title="Value",
-    template="plotly_dark",
-)
-fig.show()
+        simulations.iloc[0] = self.data[self.target_feature].iloc[-1]
+
+        return simulations
+
+    def make_forecast(
+        self,
+        days_ahead: int,
+    ) -> pd.Series:
+        forecast = self.arima_result.forecast(steps=days_ahead)
+        forecast_dates = pd.date_range(
+            start=self.data.index[-1], periods=days_ahead, freq="B"
+        )
+        forecast_series = pd.Series(forecast, index=forecast_dates)
+        forecast_series.iloc[0] = self.data[self.target_feature].iloc[-1]
+
+        return forecast_series
