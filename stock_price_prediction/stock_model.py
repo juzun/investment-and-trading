@@ -82,9 +82,11 @@ class StockModel:
             target_feature = "Adj Close"
         self.arima_model = ARIMAModel(data=self.data, target_feature=target_feature)
 
-    def save_lstm_model(self) -> None:
+    def save_lstm_model(self, custom_filename: Optional[str] = None) -> None:
         """Saves the trained LSTM model for the given ticker."""
-        self.lstm_model._save_trained_lstm_model(ticker_name=self.ticker.name)
+        self.lstm_model._save_trained_lstm_model(
+            ticker_name=self.ticker.name, custom_filename=custom_filename
+        )
 
     def load_lstm_model(self) -> None:
         """Loads a previously trained LSTM model for the given ticker."""

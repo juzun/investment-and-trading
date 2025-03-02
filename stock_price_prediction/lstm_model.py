@@ -230,7 +230,9 @@ class LSTMModel:
             * 0.05,
         }
 
-    def _save_trained_lstm_model(self, ticker_name: str) -> None:
+    def _save_trained_lstm_model(
+        self, ticker_name: str, custom_filename: Optional[str]
+    ) -> None:
         """Saves the trained LSTM model and logs its performance metrics.
 
         Args:
@@ -241,23 +243,29 @@ class LSTMModel:
             return
 
         if self.trained:
-            self.model.save(
-                Path(__file__).parent.parent
-                / "data"
-                / "models"
-                / f"lstm_{ticker_name}.keras"
-            )
-
             log = self.get_model_statistics()
-            with open(
-                Path(__file__).parent.parent
-                / "data"
-                / "logs"
-                / f"log_{ticker_name}.json",
-                "w",
-            ) as file:
-                json.dump(log, file)
-                file.write("\n")
+
+            if custom_filename is not None:
+                self.model.save(f"{custom_filename}_model.keras")
+                with open(f"{custom_filename}_log.json", "w") as file:
+                    json.dump(log, file)
+                    file.write("\n")
+            else:
+                self.model.save(
+                    Path(__file__).parent.parent
+                    / "data"
+                    / "models"
+                    / f"lstm_{ticker_name}.keras"
+                )
+                with open(
+                    Path(__file__).parent.parent
+                    / "data"
+                    / "logs"
+                    / f"log_{ticker_name}.json",
+                    "w",
+                ) as file:
+                    json.dump(log, file)
+                    file.write("\n")
 
     @classmethod
     def _load_trained_model(cls, data: pd.DataFrame, ticker_name: str) -> "LSTMModel":
