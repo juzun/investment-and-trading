@@ -1,6 +1,6 @@
 # Stock Price Prediction
 
-This project provides a stock price prediction and simulation tool using two models: LSTM (Long Short-Term Memory) for deep learning-based price predictions and ARIMA (AutoRegressive Integrated Moving Average) for time-series simulations. It is designed to facilitate stock price analysis using both models, offering a user-friendly dashboard built with **Streamlit**.
+This project provides a stock price prediction and simulation tool using two models: LSTM (Long Short-Term Memory) for deep learning-based price predictions and ARIMA (Autoregressive Integrated Moving Average) for time-series simulations. It is designed to facilitate stock price analysis using both models, offering a user-friendly dashboard.
 
 ## 📖 Table of Contents
 
@@ -14,27 +14,23 @@ This project provides a stock price prediction and simulation tool using two mod
   - [ARIMA Model](#arima-model)
   - [LSTM Model](#lstm-model)
 - [Data](#data)
-- [File Structure](#file-structure)
-- [Contributing](#contributing)
-- [License](#license)
 
 ## Introduction
 
-This application allows users to predict and simulate stock price movements for various tickers using two powerful models: **ARIMA** and **LSTM**.
+This application allows users to see prediction and future simulations of stock price movements for various tickers using models LSTM and ARIMA.
 
-The app's UI is built using **Streamlit** for a simple and interactive user interface, with pre-trained LSTM models stored in the `/data/models` directory. The predictions and simulations are visualized in real-time on the dashboard.
+The predictions and simulations can be either viewed in an interactive UI built using **Streamlit** or directly generated in CLI using **Typer**.
 
 
 ## Installation
 To get started with this project, you need to install the necessary dependencies. Poetry was used for dependency management in this project. Follow these steps to set up the environment:
 
-### Clone the Repository
+#### Clone the Repository
 ```bash
 git clone https://github.com/juzun/stock-price-prediction.git
-cd stock-price-prediction-dashboard
 ```
 
-### Install Dependencies
+#### Install Dependencies
 First, install Poetry (if not installed already). Then run:
 ```bash
 poetry install
@@ -46,8 +42,8 @@ Ensure that the pre-trained models for each ticker are available in the `/data/m
 
 
 ## Running the Application
-There are two ways to run the stock prediction application:
-- using the **Streamlit UI** for a graphical interface,
+There are two ways to run the application:
+- using the **Streamlit UI** for a graphical dashboard,
 - or using the **CLI (Typer)** to train and generate prediction and simulations.
 
 ### Streamlit UI
@@ -67,12 +63,18 @@ Replace UPS with the desired ticker symbol, and 28 with the number of prediction
 
 ## Models
 ### ARIMA Model
-The ARIMA model is a time-series model that predicts future values based on the trend, seasonality, and noise in the data. This model is trained on historical adjusted close price data and is used for simulating future stock price movements.
+The ARIMA model is a time-series model that predicts future values based on the trend, seasonality, and noise in the data. This model is fitted on historical adjusted close price data and is used for simulating future stock price movements.
+
+The order of ARIMA differs for each ticker. Several methods are combined to find an optimal order `(p, d, q)`. Numbers `p` and `q` are deduced from autocorrelation and partial autocorrelation functions of the price history. Number `d` is the number of differencing that had to be done so that the series became stationary. To test the stationarity, Augmented Dickey-Fuller unit root test was used and after that corrected with Kwiatkowski-Phillips-Schmidt-Shin test.
+
+ARIMA enables us to generate simulations of further price movements which can be used e.g. for risk management. It also allows us to create simple prediction. Although this feature is implemented in this project, it is not implemented in the final results, since LSTM predictions were more precise. ARIMA forecast is more of a mean value of future simulations.
+
+Since fitting ARIMA model is very fast in our case, no models are stored and everytime user calls for simulations either in UI or CLI, new ARIMA model is fitted.
 
 ### LSTM Model
-The LSTM (Long Short-Term Memory) model is a type of Recurrent Neural Network (RNN) designed for sequential data prediction. It is trained using several features of the stock and predicts future adjusted close prices.
+The LSTM (Long Short-Term Memory) model is a type of Recurrent Neural Network (RNN) designed for sequential data prediction. It is trained using several features of the stock and predicts future adjusted close prices. The sequence length for trained was chosen to be 30, roughly corresponding to one month - based on tests and comparisons, this number gave the best results.
 
-- The models for each ticker are pre-trained and stored in the `/data/models` directory, allowing it to be accessed and used by UI directly without requiring retraining.
+The models for each ticker are pre-trained and stored in the `/data/models` directory, allowing it to be accessed and used by UI directly without requiring retraining.
 
 
 ## Data
