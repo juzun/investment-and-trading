@@ -1,18 +1,11 @@
 from enum import Enum
-from typing import List
 
 
-class ExtendedEnum(Enum):
-    @classmethod
-    def list_values(cls) -> List[str]:
-        return [e.value for e in cls]
+class TickerSymbol(Enum):
+    """
+    Enumeration of ticker symbols and their corresponding company names.
+    """
 
-    @classmethod
-    def list_names(cls) -> List[str]:
-        return [e.name for e in cls]
-
-
-class TickerSymbol(ExtendedEnum):
     AAPL = "Apple Inc."
     MSFT = "Microsoft Corporation"
     GOOGL = "Alphabet Inc."

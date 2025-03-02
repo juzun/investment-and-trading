@@ -1,7 +1,8 @@
 import datetime as dt
 import json
+import warnings
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -13,6 +14,19 @@ from sklearn.preprocessing import MinMaxScaler
 
 
 class LSTMModel:
+    """Long Short-Term Memory (LSTM) model for time-series forecasting.
+
+    This class trains an LSTM model using past stock prices and other features to predict future prices.
+
+    Attributes:
+        data (pd.DataFrame): The dataset containing historical stock prices and features.
+        features (List[str]): The list of feature column names used for training.
+        target_feature (str): The target variable for prediction.
+        feature_index_map (dict): A mapping from feature names to their index in the dataset.
+        seq_length (int): The length of input sequences used for training.
+        trained (bool): Indicates whether the model has been trained.
+        model (Optional[Sequential]): The LSTM model (None until trained).
+    """
 
     def __init__(
         self,
@@ -21,14 +35,31 @@ class LSTMModel:
         target_feature: str,
         seq_length: int = 30,
     ) -> None:
+        """Initializes the LSTM model.
+
+        Args:
+            data (pd.DataFrame): The dataset containing stock prices and features.
+            features (List[str]): List of feature column names.
+            target_feature (str): The target feature for prediction.
+            seq_length (int, optional): The number of past days used for prediction. Defaults to 30.
+        """
         self.data = data
         self.features = features
         self.target_feature = target_feature
         self.feature_index_map = {feat: idx for idx, feat in enumerate(features)}
         self.seq_length = seq_length
         self.trained = False
+        self.model: Optional[Sequential] = None
 
     def train_model(self) -> None:
+        """Trains the LSTM model.
+
+        This method:
+        - Splits the dataset into training and test sets.
+        - Scales the features.
+        - Creates and compiles the LSTM model.
+        - Trains the model using early stopping.
+        """
         self.split_scale_sequence()
 
         self.model = self.create_model()
@@ -50,11 +81,12 @@ class LSTMModel:
         self.trained = True
 
     def split_scale_sequence(self) -> None:
+        """Splits the dataset into training and test sets, then scales the features."""
         train_size = int(len(self.data) * 0.8)
         train_data = self.data.iloc[:train_size]
         test_data = self.data.iloc[train_size:]
 
-        # Initialize scaler and fit it on training data
+        # Fit a scaler on training data
         self.scaler = MinMaxScaler()
         train_data_scaled = pd.DataFrame(
             self.scaler.fit_transform(train_data[self.features]),
@@ -65,7 +97,7 @@ class LSTMModel:
             data=train_data_scaled,
         )
 
-        # Transform test data using fitted scaler
+        # Transform test data
         self.test_data_scaled = pd.DataFrame(
             self.scaler.transform(test_data[self.features]),
             columns=self.features,
@@ -76,6 +108,14 @@ class LSTMModel:
         )
 
     def create_sequences(self, data: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
+        """Creates sequences for LSTM training.
+
+        Args:
+            data (pd.DataFrame): The scaled dataset.
+
+        Returns:
+            Tuple[np.ndarray, np.ndarray]: Sequences (X) and corresponding target values (y).
+        """
         X, y = [], []
         for i in range(len(data) - self.seq_length):
             X.append(data.iloc[i : i + self.seq_length].values)
@@ -87,6 +127,11 @@ class LSTMModel:
         return np.array(X), np.array(y)
 
     def create_model(self) -> Sequential:
+        """Creates an LSTM model architecture.
+
+        Returns:
+            Sequential: A compiled LSTM model.
+        """
         return Sequential(
             [
                 Input(shape=(self.seq_length, len(self.features))),
@@ -103,6 +148,18 @@ class LSTMModel:
         self,
         days_ahead: int,
     ) -> np.ndarray:
+        """Generates predictions for a specified number of future days.
+
+        Args:
+            days_ahead (int): The number of future days to predict.
+
+        Returns:
+            np.ndarray: The predicted stock prices (smoothed).
+        """
+        if self.model is None:
+            warnings.warn("The LSTM model wasn't yet created.")
+            return np.ndarray(0)
+
         # Start with the most recent known sequence
         if isinstance(self.test_data_scaled, pd.DataFrame):
             input_seq = self.test_data_scaled.to_numpy()[-self.seq_length :].copy()
@@ -120,11 +177,10 @@ class LSTMModel:
             # Update sequence by appending prediction and shifting window
             new_entry = np.roll(input_seq, shift=-1, axis=0)
             new_entry[-1] = input_seq[-1]
-            new_entry[-1, self.feature_index_map[self.target_feature]] = (
-                predicted_value  # Replace "Adj Close"
-            )
+            new_entry[-1, self.feature_index_map[self.target_feature]] = predicted_value
             input_seq = new_entry
 
+        # Rescale predictions
         predictions_all_fetures = np.zeros((len(predictions), len(self.features)))
         predictions_all_fetures[:, self.feature_index_map[self.target_feature]] = (
             predictions
@@ -137,7 +193,7 @@ class LSTMModel:
             predictions_descaled, 0, self.data[self.target_feature].iloc[-1]
         )
 
-        # Prediction smoothing
+        # Apply smoothing
         smoothing_factor = 0.1
         predictions_smoothed = np.array([predictions_with_last_day[0]])
         for p in predictions_with_last_day[1:]:
@@ -152,6 +208,15 @@ class LSTMModel:
         return predictions_smoothed
 
     def get_model_statistics(self) -> dict:
+        """Evaluates the model on test data and returns performance metrics.
+
+        Returns:
+            dict: A dictionary containing MSE, MAE, and benchmark comparisons.
+        """
+        if self.model is None:
+            warnings.warn("The LSTM model wasn't yet created.")
+            return {}
+
         y_pred = self.model.predict(self.X_test, verbose=0)
         return {
             "Features": self.features,
@@ -166,6 +231,15 @@ class LSTMModel:
         }
 
     def _save_trained_lstm_model(self, ticker_name: str) -> None:
+        """Saves the trained LSTM model and logs its performance metrics.
+
+        Args:
+            ticker_name (str): The stock ticker name for saving the model.
+        """
+        if self.model is None:
+            warnings.warn("The LSTM model wasn't yet created.")
+            return
+
         if self.trained:
             self.model.save(
                 Path(__file__).parent.parent
@@ -187,6 +261,15 @@ class LSTMModel:
 
     @classmethod
     def _load_trained_model(cls, data: pd.DataFrame, ticker_name: str) -> "LSTMModel":
+        """Loads a previously trained LSTM model from file.
+
+        Args:
+            data (pd.DataFrame): The stock data.
+            ticker_name (str): The stock ticker name.
+
+        Returns:
+            LSTMModel: The loaded model instance.
+        """
         loaded_model = load_model(
             Path(__file__).parent.parent
             / "data"

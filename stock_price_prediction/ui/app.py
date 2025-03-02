@@ -5,28 +5,23 @@ import streamlit as st
 from stock_price_prediction.stock_model import StockModel
 from stock_price_prediction.types import TickerSymbol
 
-# Streamlit UI Setup
 st.set_page_config(page_title="Stock Price Predictor", layout="wide")
 
 
 st.title("📈 Stock Price Prediction Dashboard")
 
-# Sidebar for user inputs
 with st.sidebar:
     st.header("⚙️ Settings")
 
-    # Select ticker
     selected_ticker_name = st.selectbox(
         "Select a Ticker:", [ticker.name for ticker in TickerSymbol], index=0
     )
     selected_ticker = TickerSymbol[selected_ticker_name]
 
-    # Number of days to predict
     prediction_days = st.slider(
         "Prediction Days Ahead", min_value=1, max_value=30, value=28
     )
 
-    # Button to trigger computations
     compute_button = st.button("📊 Show Predictions")
 
 if "stock_model_prepared" not in st.session_state:
