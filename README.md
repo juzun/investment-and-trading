@@ -69,12 +69,14 @@ The order of ARIMA differs for each ticker. Several methods are combined to find
 
 ARIMA enables us to generate simulations of further price movements which can be used e.g. for risk management. It also allows us to create simple prediction. Although this feature is implemented in this project, it is not implemented in the final results, since LSTM predictions were more precise. ARIMA forecast is more of a mean value of future simulations.
 
-Since fitting ARIMA model is very fast in our case, no models are stored and everytime user calls for simulations either in UI or CLI, new ARIMA model is fitted.
+Since fitting ARIMA model is very fast in our case, no models are stored and everytime user calls for simulations either in UI or CLI, new ARIMA model is fitted. The model is estimated during the fitting using **maximum likelihood estimation** (**MLE**) function, specifically **log-likelihood**. Under an assumption of normaly distributed residuals, the maximization of the log-likelihood is equivalent to minimizing the **sum of squared errors** (**SSE**) between the actual observed values and the fitted (predicted) values.
 
 ### LSTM Model
 The LSTM (Long Short-Term Memory) model is a type of Recurrent Neural Network (RNN) designed for sequential data prediction. It is trained using several features of the stock and predicts future adjusted close prices. The sequence length for trained was chosen to be 30, roughly corresponding to one month - based on tests and comparisons, this number gave the best results.
 
 The models for each ticker are pre-trained and stored in the `/data/models` directory, allowing it to be accessed and used by UI directly without requiring retraining.
+
+For one of the main functions evaluated during the neural network training - the loss function, **Mean squared error** (**MSE**) was used. This function penalizes large errors more than for example **MAE** and it also has continuous gradients which makes it a better choice. MSE is then also used for the training early stop. That is done by applying MSE on validation data for each epoch and if the loss value stops decreasing and starts sort of oscilating, the training is stopped before default number of epochs is reached. MSE then serves as a good metrics for the performance of the model.
 
 
 ## Data
