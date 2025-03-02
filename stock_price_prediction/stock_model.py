@@ -205,7 +205,10 @@ class StockModel:
             shared_xaxes=True,
             vertical_spacing=0.1,
             row_heights=[0.5, 0.5],
-            subplot_titles=["LSTM Prediction", "ARIMA Simulations"],
+            subplot_titles=[
+                f"{self.ticker.name} LSTM Prediction",
+                f"{self.ticker.name} ARIMA Simulations",
+            ],
         )
 
         # LSTM plot

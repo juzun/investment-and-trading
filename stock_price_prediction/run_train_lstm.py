@@ -12,9 +12,13 @@ app = typer.Typer()
 
 @app.command()
 def predict_stock(
-    ticker: str =typer.Option(  # noqa B008
+    ticker: str = typer.Option(  # noqa B008
         help="Ticker symbol of stock to predict (KO, UPS, ADBE...).",
-    )
+    ),
+    prediction_days_ahead: int = typer.Option(  # noqa B008
+        default=28,
+        help="Number of days ahead to predict. Defaults to 28.",
+    ),
 ) -> None:
     """
     Fetch stock data, train an LSTM model, and store it with the logs.
@@ -33,7 +37,7 @@ def predict_stock(
         )
         raise typer.Exit(code=1)
 
-    log.info(f"Initializing stock model for {ticker}, {valid_ticker}...")
+    log.info(f"Initializing stock model for {ticker}, {valid_ticker.value}...")
 
     # Initialize stock model
     stock_model = StockModel(ticker=valid_ticker)
@@ -47,27 +51,28 @@ def predict_stock(
     stock_model.initialize_lstm_model()
     stock_model.lstm_model.train_model()
 
-    # Save trained model
+    # Save trained LSTM model
     log.info("Savinging the trained LSTM model...")
     custom_filename = f"{ticker}_{dt.datetime.now().strftime('%m%d%H%M%S')}"
     stock_model.save_lstm_model(custom_filename=custom_filename)
     log.info(
-        f"Model saved as {f'{custom_filename}_model.keras'} with its logs as {f'{custom_filename}_log.json'}"
+        f"LSTM model saved in {f'{custom_filename}_model.keras'} with its logs in {f'{custom_filename}_log.json.'}"
     )
 
+    # Initialize and fit ARIMA model
+    log.info("Initializing and fitting ARIMA model...")
+    stock_model.initialize_arima_model()
+    stock_model.arima_model.fit_arima_model()
+
     # Generate prediction plot and save it as HTML
-    log.info("Generating LSTM prediction plot...")
-    fig: go.Figure = stock_model.generate_lstm_prediction_plot(prediction_days_ahead=28)
-    html_output_file = f"{ticker}_lstm_prediction_plot.html"
+    log.info("Generating prediction and simulations plot...")
+    fig: go.Figure = stock_model.generate_plot(
+        prediction_days_ahead=prediction_days_ahead
+    )
+    html_output_file = f"{ticker}_pred_sims_plot.html"
     fig.write_html(html_output_file)
-    log.info(html_output_file)
+    log.info(f"Prediction and simulations plot stored in {html_output_file}.")
 
 
 if __name__ == "__main__":
     app()
-
-stock_model = StockModel(ticker=TickerSymbol.KO)
-stock_model.prepare_data(start_date=dt.date(1900, 1, 1), end_date=dt.date.today())
-stock_model.initialize_lstm_model()
-stock_model.lstm_model.train_model()
-stock_model.generate_lstm_prediction_plot(prediction_days_ahead=28)

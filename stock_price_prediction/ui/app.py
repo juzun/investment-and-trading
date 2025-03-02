@@ -40,13 +40,15 @@ class StockPredictionApp:
 
             # Dropdown to select the stock ticker
             self.selected_ticker_name = st.selectbox(
-                "Select a Ticker:", [ticker.name for ticker in TickerSymbol], index=0
+                "Select a Ticker:",
+                sorted([ticker.name for ticker in TickerSymbol]),
+                index=0,
             )
             self.selected_ticker = TickerSymbol[self.selected_ticker_name]
 
             # Slider to select prediction days ahead
             self.prediction_days = st.slider(
-                "Prediction Days Ahead", min_value=1, max_value=30, value=28
+                "Prediction Days Ahead", min_value=1, max_value=45, value=28
             )
 
             # Button to trigger prediction computation
@@ -90,7 +92,8 @@ class StockPredictionApp:
         """
         if st.session_state["stock_model_prepared"]:
             st.subheader(
-                f"{st.session_state['selected_ticker'].name} Price Prediction and Simulations"
+                f"{st.session_state['selected_ticker'].name}, {st.session_state['selected_ticker'].value}",
+                divider="gray",
             )
             st.plotly_chart(st.session_state["pred_sim_plot"], use_container_width=True)
         else:
