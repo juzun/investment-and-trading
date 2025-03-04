@@ -26,6 +26,7 @@ streamlit = "^1.42.2"
 typer = "^0.15.2"
 structlog = "^25.1.0"
 pip-audit = "^2.8.0"
+shap = "^0.46.0"
 
 
 [tool.poetry.group.dev.dependencies]
